@@ -16,3 +16,4 @@ Postman
 https://www.postman.com/
 
 JDK 11
+https://www.oracle.com/it/java/technologies/javase-jdk11-downloads.html
