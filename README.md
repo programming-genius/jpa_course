@@ -1,5 +1,5 @@
 # jpa_course
-Codice progetto corso JPA/Hibernate
+Codice progetto corso JPA/Hibernate.
 
 Software richiesto:
 
