@@ -10,7 +10,7 @@ Postgres 11.11
 https://www.enterprisedb.com/downloads/postgres-postgresql-downloads   
 
 Wildfly-22.0.0.Final
-wildfly.org/downloads/
+https://wildfly.org/downloads/
 
 Postman
 https://www.postman.com/
