@@ -5,7 +5,7 @@ import java.util.List;
 
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
-import javax.persistence.Query;
+import javax.persistence.TypedQuery;
 
 import org.hibernate.Session;
 import org.springframework.stereotype.Component;
@@ -42,13 +42,11 @@ public class OrderRepositoryImplV1 implements OrderRepositoryV1 {
 	@Override
 	@Transactional(rollbackFor = { RollbackException.class })
 	public void del(Long id) throws RollbackException {
-		Query query = em.createQuery("select b from BookV1 b join fetch b.orderV1 o where o.id=" + id);
-		@SuppressWarnings("unchecked")
+		TypedQuery<BookV1> query = em.createQuery("select b from BookV1 b join fetch b.orderV1 o where o.id=" + id,
+				BookV1.class);
 		List<BookV1> books = query.getResultList();
-		Session session = em.unwrap(Session.class);
 		for (BookV1 book : books) {
 			book.setOrderV1(null);
-			session.update(book);
 		}
 		OrderV1 order = em.find(OrderV1.class, id);
 		em.remove(order);
@@ -57,21 +55,26 @@ public class OrderRepositoryImplV1 implements OrderRepositoryV1 {
 	@Override
 	@Transactional(rollbackFor = { RollbackException.class })
 	public void upd(List<BookV1> books, Long id) throws RollbackException {
-		Query query = em.createQuery("select b from BookV1 b join fetch b.orderV1 o where o.id=" + id);
-		@SuppressWarnings("unchecked")
+		// Recupero libri di un ordine
+		TypedQuery<BookV1> query = em.createQuery("select b from BookV1 b join fetch b.orderV1 o where o.id=" + id,
+				BookV1.class);
 		List<BookV1> oldBooks = query.getResultList();
 		if (oldBooks == null || oldBooks.size() == 0)
 			throw new RollbackException("Errore aggiornamento ordine");
+		// Tutti i libri referenziano lo stesso ordine
 		OrderV1 order = oldBooks.get(0).getOrderV1();
+		// Elimino l'associazione corrente
 		for (BookV1 book : oldBooks) {
 			book.setOrderV1(null);
 		}
+		// Aggiorno l'associazione con la nuova lista di libri
 		Session session = em.unwrap(Session.class);
 		for (BookV1 book : books) {
-			BookV1 bookAttached = em.find(BookV1.class, book.getId());
-			if (bookAttached != null && bookAttached.getOrderV1() != null)
-				throw new RollbackException("Libro non acquistabile");
+			// Book è detached attenzione
 			book.setOrderV1(order);
+			//em.merge(book);// Prova questo al posto di session e guarda il log
+			// Con session vado in update sugli oggetti detached senza necessità di portarli
+			// in stato attached con una query (merge)
 			session.update(book);
 		}
 	}
