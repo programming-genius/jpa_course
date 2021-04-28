@@ -2,9 +2,11 @@ package it.jpa.course.repositories;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
+import javax.persistence.TypedQuery;
 
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,17 +24,21 @@ public class OrderRepositoryImplV2 implements OrderRepositoryV2 {
 	@Override
 	@Transactional(rollbackFor = { RollbackException.class })
 	public void add(OrderV2 order) throws RollbackException {
-		List<BookV2> attachedBooks = new ArrayList<BookV2>();
+		// Costruzione insieme lista id di libri
+		List<String> ids = new ArrayList<>();
 		for (BookV2 book : order.getBooksV2()) {
-			BookV2 bookAttached = em.find(BookV2.class, book.getId());
-			if (bookAttached != null && bookAttached.getOrderV2() != null)
-				throw new RollbackException("Libro non acquistabile");
-			else {
-				attachedBooks.add(bookAttached);
-			}
+			ids.add(book.getId().toString());
 		}
+		String idsString = ids.stream().collect(Collectors.joining(",", "(", ")"));
+		// Recupero libri dell'ordine in stato attached
+		TypedQuery<BookV2> query = em
+				.createQuery("select b from BookV2 b where b.orderV2 is null and b.id in " + idsString, BookV2.class);
+		List<BookV2> books = query.getResultList();
+		if (books.isEmpty())
+			throw new RollbackException("Ordine vuoto");
 		em.persist(order);
-		for (BookV2 book : attachedBooks) {
+		// Aggiunta dei libri all'ordine sfruttando i metodi di sincronizzazione
+		for (BookV2 book : books) {
 			order.addBook(book);
 		}
 	}
@@ -43,21 +49,18 @@ public class OrderRepositoryImplV2 implements OrderRepositoryV2 {
 		if (order.getId() == null || order.getId() == 0)
 			throw new RollbackException("Entità non valida");
 		OrderV2 orderToDelete = em.find(OrderV2.class, order.getId());
-		if (orderToDelete == null) 
+		if (orderToDelete == null)
 			throw new RollbackException("Ordine non esistente");
-		List<BookV2> books = orderToDelete.getBooksV2();
-		List<BookV2> booksCopy = new ArrayList<BookV2>();
-
-		for (BookV2 book : books) {
-			booksCopy.add(book);
-		}
-
-		for (BookV2 book : booksCopy) {
+		List<BookV2> booksToDelete = orderToDelete.getBooksV2();
+		List<BookV2> booksToDeleteCopy = new ArrayList<BookV2>();
+		booksToDeleteCopy.addAll(booksToDelete);
+		// Con una copia della lista riesco a cancellare i libri dall'ordine
+		// rispettando la sincronizzazione
+		for (BookV2 book : booksToDeleteCopy) {
 			orderToDelete.removeBook(book);
 		}
 		em.remove(orderToDelete);
 	}
-	
 
 	@Override
 	@Transactional(rollbackFor = { RollbackException.class })
@@ -69,22 +72,21 @@ public class OrderRepositoryImplV2 implements OrderRepositoryV2 {
 		if (orderToUpdate == null)
 			throw new RollbackException("Errore sull'ordine");
 
-		List<BookV2> oldBooks = orderToUpdate.getBooksV2();
-		List<BookV2> oldBooksCopy = new ArrayList<BookV2>();
-
-		for (BookV2 book : oldBooks) {
-			oldBooksCopy.add(book);
-		}
-
-		for (BookV2 book : oldBooksCopy) {
+		for (BookV2 book : orderToUpdate.getBooksV2()) {
 			orderToUpdate.removeBook(book);
 		}
 
+		List<String> ids = new ArrayList<>();
 		for (BookV2 book : books) {
-			BookV2 bookAttached = em.find(BookV2.class, book.getId());
-			if (bookAttached != null && bookAttached.getOrderV2() != null)
-				throw new RollbackException("Libro non acquistabile");
-			orderToUpdate.addBook(bookAttached);
+			ids.add(book.getId().toString());
+		}
+		String idsString = ids.stream().collect(Collectors.joining(",", "(", ")"));
+		// Recupero libri dell'ordine in stato attached
+		TypedQuery<BookV2> query = em
+				.createQuery("select b from BookV2 b where b.orderV2 is null and b.id in " + idsString, BookV2.class);
+		List<BookV2> attachedBooks = query.getResultList();
+		for (BookV2 book : attachedBooks) {
+			orderToUpdate.addBook(book);
 		}
 	}
 }
